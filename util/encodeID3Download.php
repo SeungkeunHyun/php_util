@@ -40,7 +40,9 @@ function getFileNameFromPath($path) {
 }
 
 $tmpDir = dirname(__FILE__).DIRECTORY_SEPARATOR."temp";
-
+if (!file_exists($tmpDir)) {
+    mkdir($tmpDir, 0777, true);
+}
 foreach (glob($tmpDir.DIRECTORY_SEPARATOR."*.{mp3,tmp}", GLOB_BRACE) as $file) {
     if (filemtime($file) < time() - 600) {
         unlink($file);
