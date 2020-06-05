@@ -1,6 +1,6 @@
 <?php
 	ini_set('upload_max_filesize', '200M');
-	ini_set('post_max_size', '200M');
+	ini_set('post_max_size', '250M');
 	ini_set('memory_limit', '-1');
 	ini_set('mbstring.http_input', 'pass');
 	ini_set('mbstring.http_output', 'pass');
@@ -11,8 +11,8 @@
 	mb_language('uni');
 	mb_regex_encoding('UTF-8');
 	ob_start('mb_output_handler');
-	*/
 	header('Content-Type:text/html; charset=UTF-8');
+	*/
 	set_time_limit(180);
 
 	function download_remotefile($surl, $sfname) {
@@ -52,7 +52,11 @@
 
 	 function stream_copy($src, $dest)
     {
-        $fsrc = fopen($src,'r');
+		$context = stream_context_create(array('ssl'=>array(
+			'verify_peer' => true,
+			'cafile' => '/path/to/ca-bundle.crt'
+		)));
+        $fsrc = fopen($src, "rb", false, $context);
         $fdest = fopen($dest,'w+b');
         $len = stream_copy_to_stream($fsrc,$fdest);
         fclose($fsrc);
@@ -70,6 +74,14 @@
 		require_once($root."\\getid3\\getid3.php");
 		require_once($root."\\getid3\\write.php");
 	}
+	
+	$arrContextOptions=array(
+		"ssl"=>array(
+			"verify_peer"=>false,
+			"verify_peer_name"=>false
+		)
+	);  
+	$ctx = stream_context_create($arrContextOptions);
 
 
 	//print_r($_REQUEST);
@@ -99,12 +111,16 @@
 		$lclFile = $tmpDir.DIRECTORY_SEPARATOR.$fname;
 	}
 	//print_r($partsURL);
-	$imgFile = explode("/", $imgUrl);
-	$imgFile = $tmpDir.DIRECTORY_SEPARATOR.$imgFile[count($imgFile) - 1];
-	if(!file_exists($imgFile)) {
-		$fh = fopen($imgFile, "wb+");
-		$imgBytes = file_get_contents($imgUrl);
-		fwrite($fh, $imgBytes);
+	$imgFile = md5($imgUrl);
+    $imgPaths = parse_url($imgUrl, PHP_URL_PATH);
+    $ext = pathinfo($imgPaths, PATHINFO_EXTENSION);
+	$imgFile = $tmpDir.DIRECTORY_SEPARATOR.$imgFile.".".$ext;
+	if(!file_exists($imgFile) || filesize($imgFile) == 0) {
+		//$fh = fopen($imgFile, "wb+");
+		//$imgBytes = file_get_contents($imgUrl, $ctx);
+		//fwrite($fh, $imgBytes);
+		//fclose($fh);
+		copy($imgUrl, $imgFile, $ctx);
 	} else {
 		$imgBytes = file_get_contents($imgFile);
 	}
@@ -130,7 +146,8 @@
 	fwrite($fp, $data);
 	fclose($fp);
 	*/
-	stream_copy($rmtFile, $lclFile);
+	//stream_copy($rmtFile, $lclFile);
+	copy($rmtFile, $lclFile, $ctx);
 	$gid3 = new getID3;
 	$gid3->setOption(array('encoding'=>'UTF-8'));
 	//$gid3->tag_encoding = 'UTF-8';
@@ -170,13 +187,13 @@
 
 
 	if(!isset($finfo["title"])) {
-		$finfo['title'] = array(iconv("UTF-8", "EUC-KR", $_REQUEST["title"]));
+		$finfo['title'] = array($_REQUEST["title"]);
 	}
 	if(!isset($finfo["artist"])) {
-		$finfo['artist'] = array(iconv("UTF-8", "EUC-KR", $_REQUEST["artist"]));
+		$finfo['artist'] = array($_REQUEST["artist"]);
 	}
 	if(!isset($finfo["album"])) {
-		$finfo["album"] = array(iconv("UTF-8", "EUC-KR", $_REQUEST["ttl"]));
+		$finfo["album"] = array($_REQUEST["ttl"]);
 	}
 	/*
 	if(!isset($finfo["comment"])) {
@@ -185,14 +202,16 @@
 	*/
 	//$finfo["comments"] = array("unsynchronised_lyric" => array($_REQUEST["summary"]));
 	//$finfo['USLT'][0]['unsynchronised_lyrics'] = array($_REQUEST["summary"]);
-	$finfo['unsynchronised_lyrics'][0] = iconv("UTF-8", "EUC-KR", $_REQUEST["summary"]);
+	if(!isset($_REQUEST["summary"])) {
+		$finfo['unsynchronised_lyrics'][0] = $_REQUEST["summary"];
+	}
 	$finfo += array("attached_picture" => array(0 => array(
 				"picturetypeid" => 2,
 				"picturetype" => "Cover (front)",
 				"description" => "cover",
 				"mime" => "image/jpeg",
 				"data" => $imgBytes,
-				"encoding" => "EUC-KR",
+				"encoding" => "UTF-8",
 				"datalength" => count($imgBytes))
 			));
 	$id3Writer = new getid3_writetags;
